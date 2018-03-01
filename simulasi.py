@@ -1,18 +1,12 @@
-import random
-import sys
-from Queue import *
+import random,sys
 
-
-# Convert Seconds to Hour:Minute:Second Format
 def timeFormatter(inputSecond):
 	m, s = divmod(inputSecond, 60)
 	h, m = divmod(m, 60)
 	print "%d:%02d:%02d" % (h, m, s)
 
-# Calculate Average of List
 def avg(l):
 	return reduce(lambda x, y: x + y, l) / len(l)
-
 
 class Passanger:
 	def __init__(self,id,originStation,arrivedTimeAtOriginStation):
@@ -30,19 +24,15 @@ class Passanger:
 	def leavingTheBus(self, timeLeavingTheBus):
 		self.timeLeavingTheBus = timeLeavingTheBus
 
-
 class StationQueue:
 	def __init__(self,passangerPerHour,originStation):
-		self.allQueue = []
+		self.futurePassangerQueue = []
 		self.currentQueue = []
-		self.qtArea = 0
-		self.localClock = 0
-		self.firstStart = True
-		self.topRecord = 0
+		self.simulationTime = 0
+		self.isFirstStart = True
+		self.maxNumberQueue = 0
+		self.qtArea_nPeopleOnQueue = 0
 		self.initializeAllFutureEvents(passangerPerHour,originStation)
-
-	# Initialize All Future Passanger Using Expovariate Distribution
-	# All Future Passanger Stored in allQueue
 	def initializeAllFutureEvents(self,passangerPerHour,originStation):
 		global_time = 0.0
 		simulation_end = 81
@@ -57,84 +47,196 @@ class StationQueue:
 				m, s = divmod(global_time, 60)
 				h, m = divmod(m, 60)
 				a = Passanger(n_passanger,originStation,global_time)
-				self.allQueue.append(a)
-
-	def progressTime(self,time):
-		if (self.firstStart):
-			self.localClock = 0
-			self.firstStart = False
+				self.futurePassangerQueue.append(a)
+	def updateStationQueue(self,time):
+		if (self.isFirstStart):
+			self.simulationTime = 0
+			self.isFirstStart = False
 		else:
-			while (self.allQueue[0].arrivedTimeAtOriginStation <= time):
-				passanger = self.allQueue.pop(0)
+			while (self.futurePassangerQueue[0].arrivedTimeAtOriginStation <= time):
+				passanger = self.futurePassangerQueue.pop(0)
 				self.currentQueue.append(passanger)
-			self.qtArea += len(self.currentQueue) * (time - self.localClock)
-			self.localClock = time
-			if (self.topRecord < len(self.currentQueue)):
-				self.topRecord = len(self.currentQueue)
+			self.qtArea_nPeopleOnQueue += len(self.currentQueue) * (time - self.simulationTime)
+			self.simulationTime = time
+			if (self.maxNumberQueue < len(self.currentQueue)):
+				self.maxNumberQueue = len(self.currentQueue)
 	def peekFuturePassanger(self):
-		return self.allQueue[0]
+		return self.futurePassangerQueue[0]
 
 
 class Bus:
 	def __init__(self):
+		# Time Related
 		self.timeArrivedAtStation = 0
 		self.carRentalDepartureTime = 0
-		self.currentTime = 0.0
-		self.passangers = []
-		self.currentPosition = 3
-		self.busSpeed = 30 #Miles Per Hour
-		self.nOfTermixesePeople = 0
-		self.nOfCarexesePeople = 0
-		self.nOfTerminal1Target = 0
-		self.nOfTerminal2Target = 0
-		self.nPenumpangMauTurun = 0
-		self.ngetemTimeStatistics = []
-		self.loopTimeStatistics = []
-		self.isFreshStart = True
-		self.areaUnderQt = 0
-		self.maxNPassangers = 0
+		self.simulationTime = 0.0
+		# Passangers
+		self.passangersInsideBus = []
+		self.arrivedPassangers =[]
+		self.nOfPassangerFromTerminal = 0
+		self.nOfPassangerFromCarRental = 0
+		self.nOfPassangerToTerminal1 = 0
+		self.nOfPassangerToTerminal2 = 0
+		self.nOfPassangerWantToUnloadHere = 0
+		# Station Related
 		self.StationQueue = dict()
 		self.StationQueue[1] = StationQueue(14,1)
 		self.StationQueue[2] = StationQueue(10,2)
 		self.StationQueue[3] = StationQueue(24,3)
-		self.arrivedPenumpang =[]
+		self.currentPosition = 3
+		self.busSpeed = 30 #Miles Per Hour
+		#Statistics
+		self.busWaitingTimeStatistics = []
+		self.loopTimeStatistics = []
+		self.qtArea_nPassangerInsideBus = 0
+		self.maxNPassangers = 0
+		self.isFreshStart = True
 
+	def unloadPassangers(self):
+		if (self.nOfPassangerWantToUnloadHere > 0):
+			for x in range(self.nOfPassangerWantToUnloadHere):
+				passangerWantToUnload = self.passangersInsideBus.pop(0)
+				self.unloadPassanger(passangerWantToUnload)
 
-	# Return Uniform Random Variable (15-25)
+	def loadPassangers(self):
+		currentSessionbusWaitingTime = self.getMaxbusWaitingTime()
+		currentStationQueue = self.StationQueue[self.currentPosition]
+		isWaitingPhase = True
+		while (self.simulationTime <= currentSessionbusWaitingTime) and (not self.isFull()) and (isWaitingPhase):
+
+			# Load All Passanger Who Already Waiting in Station Queue as Long Bus is Not Full
+			while (len(currentStationQueue.currentQueue) > 0) and (not self.isFull()):
+				passanger = currentStationQueue.currentQueue.pop(0)
+				self.loadPassanger(passanger)
+				# Additional Waiting Time Due People Loading
+				if (self.simulationTime > currentSessionbusWaitingTime):
+					currentSessionbusWaitingTime = self.simulationTime
+			
+			# Peek Future Passanger
+			# If There is Future Passanger Who Will Come Faster Before WaitTime Ends. Wait...
+			# If No. Wait Until WaitTime Ends. Then Go..
+			if (currentStationQueue.peekFuturePassanger().arrivedTimeAtOriginStation <= currentSessionbusWaitingTime):
+				self.setsimulationTime(currentStationQueue.peekFuturePassanger().arrivedTimeAtOriginStation)
+			else:
+				isWaitingPhase = False
+				# Force Wait Until 5 Minutes (Even Is Predicted There Is No Passanger Will Come Anyway)
+				if (self.simulationTime < currentSessionbusWaitingTime):
+					self.setsimulationTime(currentSessionbusWaitingTime)
+				# Collect The Statistics Data (Waiting Time Duration)	
+				busWaitingTime = self.simulationTime - self.timeArrivedAtStation
+				self.addbusWaitingTimeStatistics(busWaitingTime)
+				# Collect The Statistics Data (Loop Time)
+				if ((self.currentPosition == 3) and (self.isFreshStart)):
+					self.carRentalDepartureTime = self.simulationTime
+				if ((self.currentPosition == 3) and (not self.isFreshStart)):
+					loopTime = self.simulationTime - self.carRentalDepartureTime
+					self.carRentalDepartureTime = self.simulationTime
+					self.addLoopTimeStatistics(loopTime)
+
+	def movePlace(self):
+		self.isFreshStart = False	
+		# [STATS] Check if Current Number of People in The Bus Breaks Record
+		if (self.maxNPassangers < len(self.passangersInsideBus)):
+			self.maxNPassangers = len(self.passangersInsideBus)
+		if (self.currentPosition == 3):
+			self.currentPosition = 1
+			self.simulationTime = self.simulationTime + (4.5 / self.busSpeed * 3600)
+			self.determinePassangerTargetStation()
+			self.nOfPassangerWantToUnloadHere = self.nOfPassangerToTerminal1
+			self.nOfPassangerFromTerminal = 0
+		elif (self.currentPosition == 1):
+			self.currentPosition = 2
+			self.simulationTime = self.simulationTime + (1 / self.busSpeed * 3600)
+			self.nOfPassangerWantToUnloadHere = self.nOfPassangerToTerminal2
+			self.nOfPassangerToTerminal1 = 0
+		else:
+			self.currentPosition = 3
+			self.simulationTime = self.simulationTime + (4.5 / self.busSpeed * 3600)
+			self.nOfPassangerWantToUnloadHere = self.nOfPassangerFromTerminal
+			self.nOfPassangerToTerminal2 = 0
+		self.timeArrivedAtStation = self.simulationTime
+		self.timeoutCheck()
+
+	def timeoutCheck(self):
+		self.refreshQueue()
+		if self.simulationTime >= (80 *3600):
+			self.printStatistics()
+			sys.exit()
+
+	def refreshQueue(self):
+		self.StationQueue[1].updateStationQueue(self.simulationTime)
+		self.StationQueue[2].updateStationQueue(self.simulationTime)
+		self.StationQueue[3].updateStationQueue(self.simulationTime)
+
+	def printStatistics(self):
+		print "Total Passanger Served : " + str(len(self.arrivedPassangers))
+		self.printBusWaitingTimeStatistics()
+		self.printLoopTimeStatistics()
+		self.printNumberPeopleOnBusStatistics()					
+		self.printNumberPersonQueueStatistics()
+		self.printDelayTimeInQueueStatistics()
+		self.printPersonInSystemStatistics()
+
+	def unloadPassanger(self,passanger):
+		unloadTime = self.unloadPassangerDuration()
+		passanger.timeArrivedAtStation = self.simulationTime
+		self.simulationTime += unloadTime
+		passanger.timeLeavingTheBus = self.simulationTime
+		passanger.targetStation = self.currentPosition
+		self.arrivedPassangers.append(passanger)	
+		if (passanger.originStation == 3):
+			self.nOfPassangerFromCarRental -= 1
+		else:
+			self.nOfPassangerFromTerminal -= 1
+		self.qtArea_nPassangerInsideBus = self.qtArea_nPassangerInsideBus + (self.simulationTime - passanger.timeEnteringTheBus)
+		self.timeoutCheck()
+
+	def loadPassanger(self,passanger):
+		loadTime = self.loadPassangerDuration()
+		passanger.enteringTheBus(self.simulationTime + loadTime)
+		self.passangersInsideBus.append(passanger)
+		self.simulationTime = passanger.timeEnteringTheBus
+		if (passanger.originStation == 3):
+			self.nOfPassangerFromCarRental += 1
+		else:
+			self.nOfPassangerFromTerminal +=1
+		self.timeoutCheck()
+
 	def loadPassangerDuration(self):
 		rand_var = random.uniform(0,1)
 		processed_var = (rand_var * 10) + 15
 		return processed_var
 
-	# Return Uniform Random Variable (16 - 24)
 	def unloadPassangerDuration(self):
 		rand_var = random.uniform(0,1)
 		processed_var = (rand_var * 8) + 16
 		return processed_var
 
+	def determinePassangerTargetStation(self):
+		for x in range(self.nOfPassangerFromCarRental):
+			if (random.uniform(0,1) <= 0.583):
+				self.nOfPassangerToTerminal1 += 1
+			else:
+				self.nOfPassangerToTerminal2 += 1
 
-	def getNumberPersonQueueStatistics(self):
+	def printNumberPersonQueueStatistics(self):
 		print "Average Number Queue"
 		print "	Station1 :",
-		print self.StationQueue[1].qtArea / self.currentTime
+		print self.StationQueue[1].qtArea_nPeopleOnQueue / self.simulationTime
 		print "	Station2 :",
-		print self.StationQueue[2].qtArea / self.currentTime
+		print self.StationQueue[2].qtArea_nPeopleOnQueue / self.simulationTime
 		print "	Station3 :",
-		print self.StationQueue[3].qtArea / self.currentTime
+		print self.StationQueue[3].qtArea_nPeopleOnQueue / self.simulationTime
 		print "Max Number Queue"
 		print "	Station1 :",
-		print self.StationQueue[1].topRecord 
+		print self.StationQueue[1].maxNumberQueue 
 		print "	Station2 :",
-		print self.StationQueue[2].topRecord 
+		print self.StationQueue[2].maxNumberQueue 
 		print "	Station3 :",
-		print self.StationQueue[3].topRecord 
+		print self.StationQueue[3].maxNumberQueue 
 
-	def addNgetemTimeStatistics(self,ngetemTime):
-		self.ngetemTimeStatistics.append(ngetemTime)
-	def addLoopTimeStatistics(self,loopTime):
-		self.loopTimeStatistics.append(loopTime)
-	def getNgetemTimeStatistics(self):
-		l = self.ngetemTimeStatistics
+	def printBusWaitingTimeStatistics(self):
+		l = self.busWaitingTimeStatistics
 		avgBusWaitTime = avg(l)
 		maxBusWaitTime = max(l)
 		minBusWaitTime = min(l)
@@ -145,7 +247,8 @@ class Bus:
 		timeFormatter(avgBusWaitTime)		
 		print "	Min : ",
 		timeFormatter(minBusWaitTime)
-	def getLoopTimeStatistics(self):
+	
+	def printLoopTimeStatistics(self):
 		l = self.loopTimeStatistics
 		avgLoopTime = avg(l)
 		maxLoopTime = max(l)
@@ -157,30 +260,24 @@ class Bus:
 		timeFormatter(avgLoopTime)			
 		print "	Min: ",
 		timeFormatter(minLoopTime)
-	def refreshQueue(self):
-		self.StationQueue[1].progressTime(self.currentTime)
-		self.StationQueue[2].progressTime(self.currentTime)
-		self.StationQueue[3].progressTime(self.currentTime)
-	
-	def getNumberPeopleOnBusStatistics(self):
+		
+	def printNumberPeopleOnBusStatistics(self):
 		#Calculate Area Under Qt Based On Remaining Passanger in The Bus
-		for x in range(len(self.passangers)):
-			self.areaUnderQt = self.areaUnderQt + (self.currentTime - self.passangers[x].timeEnteringTheBus)
+		for x in range(len(self.passangersInsideBus)):
+			self.qtArea_nPassangerInsideBus = self.qtArea_nPassangerInsideBus + (self.simulationTime - self.passangersInsideBus[x].timeEnteringTheBus)
 		#Calculate Avg Number of People on The Bus
-		avgNumberOfPeopleOnTheBus = self.areaUnderQt / self.currentTime
+		avgNumberOfPeopleOnTheBus = self.qtArea_nPassangerInsideBus / self.simulationTime
 		print "Number of People On The Bus"
 		print "	Max : ",
 		print self.maxNPassangers
 		print "	Avg : ",
 		print avgNumberOfPeopleOnTheBus	
 
-
-
 	# Calculate "Time Spent In System" Statistics by Using List of Arrived Passanger
-	def personInSystemStatistics(self):
+	def printPersonInSystemStatistics(self):
 		penumpangInSystemTime = []
-		for x in range(len(self.arrivedPenumpang)):
-			penumpangInSystemTime.append(self.arrivedPenumpang[x].timeLeavingTheBus - self.arrivedPenumpang[x].arrivedTimeAtOriginStation)
+		for x in range(len(self.arrivedPassangers)):
+			penumpangInSystemTime.append(self.arrivedPassangers[x].timeLeavingTheBus - self.arrivedPassangers[x].arrivedTimeAtOriginStation)
 		l = penumpangInSystemTime
 		avgInSystemTime = avg(l)
 		maxInSystemTime = max(l)
@@ -193,19 +290,18 @@ class Bus:
 		print "	Min : ",
 		timeFormatter(minInSystemTime)
 
-
 	# Calculate "Delay Time In Queue" Statistics by Using List of Arrived Passanger
-	def delayTimeInQueueStatistics(self):
+	def printDelayTimeInQueueStatistics(self):
 		max_delayTime = [-1,-1,-1]
 		sum_delayTime = [0,0,0]
 		avg_delayTime = [0,0,0]
 		n_passangerInStation  = [0,0,0]
-		for x in range(len(self.arrivedPenumpang)):
-			station_type = self.arrivedPenumpang[x].originStation - 1
+		for x in range(len(self.arrivedPassangers)):
+			station_type = self.arrivedPassangers[x].originStation - 1
 			n_passangerInStation[station_type] += 1
-			sum_delayTime[station_type] += self.arrivedPenumpang[x].delayTimeInQueue
-			if (self.arrivedPenumpang[x].delayTimeInQueue > max_delayTime[station_type]):
-				max_delayTime[station_type] = self.arrivedPenumpang[x].delayTimeInQueue
+			sum_delayTime[station_type] += self.arrivedPassangers[x].delayTimeInQueue
+			if (self.arrivedPassangers[x].delayTimeInQueue > max_delayTime[station_type]):
+				max_delayTime[station_type] = self.arrivedPassangers[x].delayTimeInQueue
 		print "Max Delay Time"
 		for x in range(0,3):
 			avg_delayTime[x] = sum_delayTime[x] / n_passangerInStation[x]		
@@ -216,138 +312,28 @@ class Bus:
 			print "	Queue " + str(x+1) + " : ",
 			timeFormatter(avg_delayTime[x])
 
+	def addbusWaitingTimeStatistics(self,busWaitingTime):
+		self.busWaitingTimeStatistics.append(busWaitingTime)
 
+	def addLoopTimeStatistics(self,loopTime):
+		self.loopTimeStatistics.append(loopTime)
 
-	def printStatistics(self):
-		print "Total Passanger Served : " + str(len(self.arrivedPenumpang))
-		self.getNgetemTimeStatistics()
-		self.getLoopTimeStatistics()
-		self.getNumberPeopleOnBusStatistics()					
-		self.getNumberPersonQueueStatistics()
-		self.delayTimeInQueueStatistics()
-		self.personInSystemStatistics()
+	def getMaxbusWaitingTime(self):
+		return self.simulationTime + (5 * 60)
 
-
-	def timeoutCheck(self):
-		self.refreshQueue()
-		if self.currentTime >= (80 *3600):
-			timeFormatter(self.currentTime)
-			print "Time Is Over - Simulation Halted!"
-			self.printStatistics()
-			sys.exit()
-
-	def whichTerminalSir(self):
-		for x in range(self.nOfCarexesePeople):
-			if (random.uniform(0,1) <= 0.583):
-				self.nOfTerminal1Target += 1
-			else:
-				self.nOfTerminal2Target += 1
-	def movePlace(self):
-		self.isFreshStart = False	
-		#Check if Current Number of People in The Bus Breaks Record :D
-		if (self.maxNPassangers < len(self.passangers)):
-			self.maxNPassangers = len(self.passangers)
-		if (self.currentPosition == 3):
-			self.currentPosition = 1
-			self.currentTime = self.currentTime + (4.5 / self.busSpeed * 3600)
-			self.whichTerminalSir()
-			self.nPenumpangMauTurun = self.nOfTerminal1Target
-			self.nOfTermixesePeople = 0
-		elif (self.currentPosition == 1):
-			self.currentPosition = 2
-			self.currentTime = self.currentTime + (1 / self.busSpeed * 3600)
-			self.nPenumpangMauTurun = self.nOfTerminal2Target
-			self.nOfTerminal1Target = 0
-		else:
-			self.currentPosition = 3
-			self.currentTime = self.currentTime + (4.5 / self.busSpeed * 3600)
-			self.nPenumpangMauTurun = self.nOfTermixesePeople
-			self.nOfTerminal2Target = 0
-		self.timeArrivedAtStation = self.currentTime
+	def setsimulationTime(self,newtime):
+		self.simulationTime = newtime
 		self.timeoutCheck()
-		print "Angkot Sampai Di Terminal "+ str(self.currentPosition) + " pada ",
-		timeFormatter(self.currentTime)
 
-	def getMaxNgetemTime(self):
-		return self.currentTime + (5 * 60)
-	def loadPassanger(self,passanger):
-		loadTime = self.loadPassangerDuration()
-		passanger.enteringTheBus(self.currentTime + loadTime)
-		self.passangers.append(passanger)
-		self.currentTime = passanger.timeEnteringTheBus
-		if (passanger.originStation == 3):
-			self.nOfCarexesePeople += 1
-		else:
-			self.nOfTermixesePeople +=1
-		self.timeoutCheck()
-	def setCurrentTime(self,newtime):
-		self.currentTime = newtime
-		self.timeoutCheck()
 	def isFull(self):
-		return len(self.passangers) >= 20
+		return len(self.passangersInsideBus) >= 20
+
 	def getNPassanger(self):
-		return len(self.passangers)
-	def unloadPassanger(self):
-		if (self.nPenumpangMauTurun == 0):
-			print "Tidak Ada Penumpang Mau Turun Di Terminal Ini..."
-		else:
-			print "Ada " + str(self.nPenumpangMauTurun) + " Penumpang Mau Turun Disini"
-			for x in range(self.nPenumpangMauTurun):
-				unloadTime = self.unloadPassangerDuration()
-				penumpangTurun = self.passangers.pop(0)
-				penumpangTurun.timeArrivedAtStation = self.currentTime
-				self.currentTime += unloadTime
-				penumpangTurun.timeLeavingTheBus = self.currentTime
-				penumpangTurun.targetStation = self.currentPosition
-				self.arrivedPenumpang.append(penumpangTurun)	
-				if (penumpangTurun.originStation == 3):
-					self.nOfCarexesePeople -= 1
-				else:
-					self.nOfTermixesePeople -= 1
-				self.areaUnderQt = self.areaUnderQt + (self.currentTime - penumpangTurun.timeEnteringTheBus)
-				self.timeoutCheck()
-	def loadPassangers(self):
-		currentSessionNgetemTime = self.getMaxNgetemTime()
-		currentStationQueue = self.StationQueue[self.currentPosition]
-		isWaitingPhase = True
-		while (self.currentTime <= currentSessionNgetemTime) and (not self.isFull()) and (isWaitingPhase):
-			while (len(currentStationQueue.currentQueue) > 0) and (not self.isFull()):
-				passanger = currentStationQueue.currentQueue.pop(0)
-				self.loadPassanger(passanger)
-				# Additional Waiting Time Due People Loading
-				if (self.currentTime > currentSessionNgetemTime):
-					currentSessionNgetemTime = self.currentTime
-			if (currentStationQueue.peekFuturePassanger().arrivedTimeAtOriginStation <= currentSessionNgetemTime):
-				self.setCurrentTime(currentStationQueue.peekFuturePassanger().arrivedTimeAtOriginStation)
-			else:
-				isWaitingPhase = False
-				# Force Wait Until 5 Minutes (Even Is Predicted There Is No Passanger Will Come Anyway)
-				if (self.currentTime < currentSessionNgetemTime):
-					self.setCurrentTime(currentSessionNgetemTime)
-
-				# Collect The Statistics Data (Waiting Time Duration)	
-				ngetemTime = self.currentTime - self.timeArrivedAtStation
-				self.addNgetemTimeStatistics(ngetemTime)
-
-				#Collect The Statistics Data (Loop Time)
-				if ((self.currentPosition == 3) and (self.isFreshStart)):
-					self.carRentalDepartureTime = self.currentTime
-				if ((self.currentPosition == 3) and (not self.isFreshStart)):
-					loopTime = self.currentTime - self.carRentalDepartureTime
-					self.carRentalDepartureTime = self.currentTime
-					#print "Loop Time : ",
-					timeFormatter(loopTime)
-					self.addLoopTimeStatistics(loopTime)		
-
-
-
-
+		return len(self.passangersInsideBus)
+	
+		
 bus = Bus()
 while True:
-	bus.unloadPassanger()
+	bus.unloadPassangers()
 	bus.loadPassangers()
 	bus.movePlace()
-
-
-
-
