@@ -1,10 +1,21 @@
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage{listings}
+\usepackage{hyperref}
 
-\title{Simulasi Event Diskrit}
-\date{27-02-2018}
+\title{Simulasi Event Diskrit (Studi Kasus : Simulasi Sistem Transportasi Bus)}
+\date{1-03-2018}
 \author{Adi Purnama}
+
+\author{
+  Adi Purnama\\
+  \texttt{13514006@std.stei.itb.ac.id}
+  \and
+  Hafizh Afkar Makmur\\
+  \texttt{13514062@std.stei.itb.ac.id}
+}
+
+
 \lstset{
 				breaklines,
     tabsize=1
@@ -164,7 +175,14 @@ def unloadPassanger(self,passanger):
 \end{lstlisting}
 
 \subsubsection{loadPassangers()}
-Method untuk menunggu dan memasukan penumpang yang ingin naik ke Bus. 
+Method untuk menunggu dan memasukan penumpang yang ingin naik ke Bus. Algoritma yang digunakan adalah sebagai berikut
+
+\begin{enumerate}
+	\item Naikkan seluruh penumpang yang saat ini sudah menunggu di stasiun
+	\item Ramalkan kedatangan penumpang di masa depan (panggil method peekFuturePassanger() untuk mendapatkan penumpang teratas di queue futurePassangerQueue). Jika penumpang tersebut akan datang sebelum batas waktu tunggu berakhir. Tunggu hingga penumpang itu datang. Jika tidak, lanjutkan perjalanan ke stasiun berikutnya.
+\end{enumerate}
+
+
 \begin{lstlisting}[language=Python]
 def loadPassangers(self):
 		currentSessionbusWaitingTime = self.getMaxbusWaitingTime()
@@ -204,6 +222,23 @@ def loadPassangers(self):
 
 \end{lstlisting}
 
+
+\pagebreak
+\subsubsection{loadPassanger()}
+Method untuk menaikan satu penumpang dari stasiun ke dalam bis.
+
+\begin{lstlisting}[language=Python]
+def loadPassanger(self,passanger):
+	loadTime = self.loadPassangerDuration()
+	passanger.enteringTheBus(self.simulationTime + loadTime)
+	self.passangersInsideBus.append(passanger)
+	self.simulationTime = passanger.timeEnteringTheBus
+	if (passanger.originStation == 3):
+		self.nOfPassangerFromCarRental += 1
+	else:
+		self.nOfPassangerFromTerminal +=1
+	self.timeoutCheck()
+\end{lstlisting}
 
 \subsubsection{movePlace()}
 Method yang berfungsi untuk memindahkan bus dari satu stasiun ke stasiun selanjutnya. 
@@ -257,7 +292,7 @@ def timeoutCheck(self):
 			sys.exit()
 \end{lstlisting}
 
-
+\pagebreak
 \subsection{Statistik}
 Secara umum, perhitungan statistik di dalam kasus ini dapat digolongkan menjadi dua jenis
 
@@ -269,7 +304,7 @@ Langkah menghitung statistik ini adalah sebagai berikut :
 \item Setiap penumpang memiliki informasi "Waktu menunggu di stasiun". Kumpulkan informasi ini dari seluruh penumpang, lalu masukkan ke dalam sebuah struktur data list.
 \item Lakukan operasi avg() dan max() terhadap struktur data list tersebut.
 \end{enumerate}
-Sebagian besar perhitungan statistik dalam kasus ini tergolong sebagai statistik diskrit, antara lain :
+Sebagian besar perhitungan statistik yang dapat diselesaikan dengan cara ini, antara lain :
 	\begin{enumerate}
 	\item Panjang maksimum antrian di tiap titik pemberhentian 
 	\item Waktu tunggu yang dirasakan penumpang saat menunggu bis datang di titik pemberhentian (rata rata \& maksimum)
@@ -278,7 +313,7 @@ Sebagian besar perhitungan statistik dalam kasus ini tergolong sebagai statistik
 	\item Waktu bis melakukan 1 loop. 1 Loop didefinisikan sejak keberangkatan dari Car Rental (rata rata , maksimum, minimum)
 	\item Waktu total perjalanan yang dirasakan penumpang. Waktu total dimulai sejak penumpang datang ke titik pemberhentian sampai keluar dari bis. (rata rata \& maksimum)
 	\end{enumerate}
-	Semua perhitungan statistik di atas mengikuti pola yang sama, yaitu kumpulkan seluruh informasi ke dalam sebuah list , lalu operasikan list tersebut dengan fungsi avg(), min(), atau max(). Berikut adalah potongan source code untuk menghitung statistik diskrit.
+	Semua perhitungan statistik di atas mengikuti pola yang sama, yaitu kumpulkan seluruh informasi ke dalam sebuah list , lalu operasikan list tersebut dengan fungsi avg(), min(), atau max(). Berikut adalah potongan source code untuk menghitung statistik.
 \begin{lstlisting}[language=Python]
 def printLoopTimeStatistics(self):
 		l = self.loopTimeStatistics
@@ -295,25 +330,138 @@ def printLoopTimeStatistics(self):
 \end{lstlisting}
 
 \subsubsection{Rata Rata Panjang Antrian}
-Statistik mengenai rata-rata panjang antrian dihitung menggunakan rumus sebagai berikut
-$$\hat q (n) = (\sum_{i=0}^{\infty} iT_i) / T(n) $$
+Statistik mengenai rata-rata panjang antrian dihitung menggunakan langkah sebagai berikut.
+\begin{enumerate}
+\item Untuk setiap panjang antrian, hitung durasi terjadinya
+\item Jumlahkan hasil kali panjang antrian dengan durasi terjadinya
+\item Bagi hasil penjumlahan tersebut dengan waktu akhir simulasi
+\end{enumerate}
+Sebagai contoh, perhatikan tabel di bawah ini :
+
+\begin{center}
+ \begin{tabular}{||c | c||} 
+ \hline
+ Panjang Antrian & Durasi Waktu Terjadi (s) \\ [0.5ex] 
+ \hline\hline
+ 1 & 2.3 \\ 
+ \hline
+ 2 & 7.1 \\
+ \hline
+ 3 & 2.3 \\
+ \hline
+\end{tabular}
+\end{center}
+
+Rata-rata panjang antrian dapat dihitung sebagai berikut
+
+$$ rataRataPanjangAntrian = \frac{(1x2.3) + (2x7.1) + (3 x 2.3)}{2.3 + 7.1 + 2.3}  $$
+
+Pada kasus ini, terdapat dua perhitungan statistik yang melibatkan rata-rata panjang antrian, yaitu :
+\begin{enumerate}
+	\item Rata-rata panjang antrian di setiap stasiun pemberhentian
+	\item Rata-rata jumlah penumpang yang menaiki bus
+\end{enumerate}
+
+Untuk rata-rata panjang antrian di setiap stasiun pemberhentian, jumlahkan seluruh durasi waktu menunggu yang dialami oleh setiap penumpang pada suatu stasiun, lalu bagi dengan waktu akhir simulasi. Total seluruh waktu menunggu yang dialami oleh penumpang pada suatu stasiun disimpan pada atribut qtAreanPeopleOnQueue di kelas StationQueue. Setiap kali waktu simulasi dimajukan sebesar a detik, qtAreanPeopleOnQueue akan ditambah dengan (a x jumlahOrangdiAntrianSaatIni)
+\begin{lstlisting}[language=Python]
+def updateStationQueue(self,time):
+			self.qtArea_nPeopleOnQueue += len(self.currentQueue) * (time - self.simulationTime)
+\end{lstlisting}
+Lalu, bagi nilai itu dengan waktu akhir simulasi untuk mendapatkan rata-rata panjang antrian.
+\begin{lstlisting}[language=Python]
+def printNumberPersonQueueStatistics(self):
+	print "Average Number Queue"
+	print "	Station1 :",
+	print self.StationQueue[1].qtArea_nPeopleOnQueue / self.simulationTime
+	print "	Station2 :",
+	print self.StationQueue[2].qtArea_nPeopleOnQueue / self.simulationTime
+	print "	Station3 :",
+	print self.StationQueue[3].qtArea_nPeopleOnQueue / self.simulationTime
+\end{lstlisting}
+Untuk rata-rata jumlah penumpang yang menaiki bus, jumlahkan seluruh durasi waktu selama di dalam bis yang dialami oleh setiap penumpang, lalu bagi dengan waktu akhir simulasi.
 
 
+\section{Hasil Simulasi}
+
+\subsection{Statistik Bus}
+
+\begin{center}
+ \begin{tabular}{||c | c | c | c||} 
+ \hline
+ Statistik & Max & Avg & Min \\ [0.5ex] 
+ \hline\hline
+ Bus Waiting Time & 0:13:43 & 0:09:17 & 0:05:00 \\ 
+ \hline
+ Bus Loop Time & 0:48:17 & 0:45:15 & 0:38:12 \\
+ \hline
+ Number of People On The Bus & 20 & 13.9710474206 & - \\
+ \hline
+\end{tabular}
+\end{center}
 
 
+Hal menarik yang dapat disimpulkan dari hasil statistik ini adalah sebagai berikut :
 
-	
-	Sementara itu, pembangunan ontologi dengan pendekatan bottom-up dimulai dari bidang keilmuan yang spesifik lalu ke yang lebih umum. Pendekatan ini dilakukan dengan menganalisa buku-buku yang ada di Perpustakaan Teknik Informatika ITB. Metode yang dilakukan untuk melakukan pendekatan ini adalah sebagai berikut
-	\paragraph{Analisis Judul Buku}
- 	Ontologi keilmuan dapat dikonstruksi menggunakan daftar judul buku yang dimiliki perpustakaan. Hal ini karena judul buku sudah mengandung istilah-istilah (term) yang menjadi kata kunci untuk membangun ontologi
- 	\paragraph{Analisis Konten Buku}
- 	Untuk beberapa kasus khusus, ontologi keilmuan baru dapat dikonstruksi setelah melakukan analisis terhadap isi buku. Hal ini disebabkan karena judul buku masih terlalu tersirat atau tidak mengandung term kata kunci. Analisis ini membutuhkan waktu yang lebih lama daripada analisis judul buku, namun dapat memberikan kualitas dan akurasi yang lebih baik. Analisis Konten Buku dilakukan terhadap sampel dari buku-buku yang ada di perpustakaan.
+\begin{enumerate}
+	\item Rata-rata, bus menunggu di stasiun selama sekitar 9 menit
+	\item Rata-rata, waktu yang diperlukan bus untuk melakukan satu putaran adalah 45 menit
+	\item Rata-rata, bus selalu terisi 14 orang dari total kapasitas 20 (Utilisasi 69\%)
+\end{enumerate}  
 
- 	\vspace{5mm}
- 	Pembangunan ontologi dilakukan secara iteratif untuk meningkatkan kualitasnya. Saat ini, pembangunan ontologi masih terus dilakukan dengan menggabungkan ketiga teknik diatas (top-down, analisis judul buku, analisis konten buku) untuk meningkatkan kualitas ontologi.
+\pagebreak
+\subsection{Statistik Stasiun}
+
+\begin{center}
+ \begin{tabular}{||c | c | c | c||} 
+ \hline
+ Statistik & Air Terminal 1 & Air Terminal 2 & Car Rental \\ [0.5ex] 
+ \hline\hline
+ Average Number Queue & 6.18643751187 & 7.70652576188 & 9.31329665976 \\ 
+ \hline
+ Avg Delay Time & 0:25:04 & 0:45:50 & 0:23:13 \\
+ \hline
+ Max Delay Time & 1:16:40 & 3:40:37 & 1:08:15 \\
+ \hline
+ Max Number Queue & 22 & 39 & 28 \\
+ \hline
+\end{tabular}
+\end{center}
 
 
- 	\begin{lstlisting}[language=Python]
+Hal menarik yang dapat disimpulkan dari hasil statistik ini adalah sebagai berikut :
+
+\begin{enumerate}
+	\item Rata-rata , stasiun Car Rental cenderung lebih ramai dibanding stasiun yang lain dengan panjang antrian rata-rata 9 orang. 
+	\item Dapat disimpulkan bahwa kualitas layanan terburuk ada di Stasiun Air Terminal 2. Penumpang akan merasakan waktu menunggu lebih lama jika dia menunggu di Stasiun Air Terminal 2 (45 Menit). Pada kasus terburuk, penumpang dapat menunggu hingga 3 jam 40 menit untuk menunggu bus di Stasiun Air Terminal 2. Hal ini dapat disebabkan karena bus yang datang sudah penuh, sehingga harus menunggu bus untuk melakukan satu putaran lagi. Mengingat waktu rata-rata bus untuk melakukan 1 putaran adalah 45 menit, dalam kasus ini, penumpang harus menunggu bis hingga 4 putaran karena bus tersebut selalu penuh. Pada kasus terburuk, panjang antrian dapat mengular hingga 39 orang, kejadian ini juga terjadi di Stasiun Air Terminal 2.
+	\item Meskipun Stasiun Air Terminal 2 cenderung sepi dikunjungi (10 orang/jam), kualitas layanan di stasiun ini cenderung paling buruk. Hal ini disebabkan karena ramainya calon penumpang dari Stasiun Air Terminal 1 (14 orang/jam) dan Stasiun Car Rental (24 orang/jam). Sebelum ke Stasiun Air Terminal 2, bus harus melalui Stasiun Car Rental \& Stasiun Air Terminal 1 . Saat bus sampai di Stasiun Air Terminal 2, kemungkinan bus sudah penuh. Hal ini mengakibatkan calon penumpang harus menunggu bus selanjutnya datang. 
+\end{enumerate}  
+
+
+\subsection{Statistik Penumpang}
+
+\begin{center}
+ \begin{tabular}{||c | c | c | c||} 
+ \hline
+ Statistik & Max & Avg & Min \\ [0.5ex] 
+ \hline\hline
+ Passanger In System Duration & 3:56:19 & 0:46:48 & 0:12:54 \\ 
+ \hline
+\end{tabular}
+\end{center}
+
+
+Hal menarik yang dapat disimpulkan dari hasil statistik ini adalah sebagai berikut :
+
+\begin{enumerate}
+	\item Rata-rata, penumpang menghabiskan waktu perjalanan selama 46 menit.
+	\item Durasi waktu tercepat yang dialami penumpang saat melakukan perjalanan adalah hanya 12 menit. Hal ini dapat disebabkan karena jarak tempuh yang dekat, dan bis yang tidak terlalu lama menunggu di stasiun.
+	\item Pada kasus terburuk, penumpang dapat menghabiskan waktu hingga sekitar 4 jam di perjalanan. Hal ini dapat disebabkan oleh kombinasi beberapa faktor, diantaranya waktu menunggu bus yang lama, jauhnya jarak tempuh, dan lamanya bus singgah di stasiun pemberhentian.	
+\end{enumerate}  
+
+\subsection{Source Code} 
+Source code program simulasi ini dapat diakses online di \url{https://github.com/adipurnama141/BusSimulator}
+
+\begin{lstlisting}[language=Python]
 
 import random,sys
 
