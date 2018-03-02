@@ -44,8 +44,6 @@ class StationQueue:
 			global_time += passanger_arrival
 			if (global_time <= simulation_end):
 				n_passanger += 1
-				m, s = divmod(global_time, 60)
-				h, m = divmod(m, 60)
 				a = Passanger(n_passanger,originStation,global_time)
 				self.futurePassangerQueue.append(a)
 	def updateStationQueue(self,time):
@@ -141,20 +139,24 @@ class Bus:
 		if (self.currentPosition == 3):
 			self.currentPosition = 1
 			self.simulationTime = self.simulationTime + (4.5 / self.busSpeed * 3600)
+			timeSpentOnRoad = (4.5 / self.busSpeed * 3600)
 			self.determinePassangerTargetStation()
 			self.nOfPassangerWantToUnloadHere = self.nOfPassangerToTerminal1
 			self.nOfPassangerFromTerminal = 0
 		elif (self.currentPosition == 1):
 			self.currentPosition = 2
 			self.simulationTime = self.simulationTime + (1 / self.busSpeed * 3600)
+			timeSpentOnRoad = (1 / self.busSpeed * 3600)
 			self.nOfPassangerWantToUnloadHere = self.nOfPassangerToTerminal2
 			self.nOfPassangerToTerminal1 = 0
 		else:
 			self.currentPosition = 3
 			self.simulationTime = self.simulationTime + (4.5 / self.busSpeed * 3600)
+			timeSpentOnRoad = (4.5 / self.busSpeed * 3600)
 			self.nOfPassangerWantToUnloadHere = self.nOfPassangerFromTerminal
 			self.nOfPassangerToTerminal2 = 0
-		self.timeArrivedAtStation = self.simulationTime
+		self.timeArrivedAtStation = self.simulationTime	
+		self.qtArea_nPassangerInsideBus += len(self.passangersInsideBus) * timeSpentOnRoad
 		self.timeoutCheck()
 
 	def timeoutCheck(self):
@@ -188,7 +190,7 @@ class Bus:
 			self.nOfPassangerFromCarRental -= 1
 		else:
 			self.nOfPassangerFromTerminal -= 1
-		self.qtArea_nPassangerInsideBus = self.qtArea_nPassangerInsideBus + (self.simulationTime - passanger.timeEnteringTheBus)
+
 		self.timeoutCheck()
 
 	def loadPassanger(self,passanger):
@@ -263,9 +265,7 @@ class Bus:
 		
 	def printNumberPeopleOnBusStatistics(self):
 		#Calculate Area Under Qt Based On Remaining Passanger in The Bus
-		for x in range(len(self.passangersInsideBus)):
-			self.qtArea_nPassangerInsideBus = self.qtArea_nPassangerInsideBus + (self.simulationTime - self.passangersInsideBus[x].timeEnteringTheBus)
-		#Calculate Avg Number of People on The Bus
+			#Calculate Avg Number of People on The Bus
 		avgNumberOfPeopleOnTheBus = self.qtArea_nPassangerInsideBus / self.simulationTime
 		print "Number of People On The Bus"
 		print "	Max : ",
